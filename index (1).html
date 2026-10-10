@@ -1,0 +1,309 @@
+<title>WhatsApp Sales Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sidebar + workspace; sidebar becomes a scrolling tab bar at phone width */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#14212b; --muted:#5b6b78; --line:#dde3e8;
+  --accent:#0b7a6b; --accent-ink:#ffffff; --accent-soft:#dff2ee;
+  --ai:#2f5bd0; --ai-soft:#e4ebfc; --human:#9a5b00; --human-soft:#fdeccf;
+  --good:#1a7f45; --warn:#b26a00; --bad:#b3261e; --bubble-c:#ffffff; --bubble-o:#d9f3e4; --chatbg:#e9eef0;
+  --f-display:'Bricolage Grotesque',system-ui,sans-serif; --f-body:'Instrument Sans',system-ui,sans-serif; --f-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e161c; --surface:#16212a; --ink:#e6edf2; --muted:#8fa1ae; --line:#26343f;
+  --accent:#3cc4ad; --accent-ink:#06211c; --accent-soft:#12332d;
+  --ai:#8aa8ff; --ai-soft:#1b2849; --human:#f0b25a; --human-soft:#3a2b10;
+  --good:#5fd08b; --warn:#f0b25a; --bad:#ff8a80; --bubble-c:#1f2d38; --bubble-o:#16443a; --chatbg:#0f1a20; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e161c; --surface:#16212a; --ink:#e6edf2; --muted:#8fa1ae; --line:#26343f;
+  --accent:#3cc4ad; --accent-ink:#06211c; --accent-soft:#12332d;
+  --ai:#8aa8ff; --ai-soft:#1b2849; --human:#f0b25a; --human-soft:#3a2b10;
+  --good:#5fd08b; --warn:#f0b25a; --bad:#ff8a80; --bubble-c:#1f2d38; --bubble-o:#16443a; --chatbg:#0f1a20; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
+.brand{font-family:var(--f-display);font-weight:700;font-size:17px;line-height:1.1;padding:0 8px}
+.brand small{display:block;font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted);margin-top:4px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;color:var(--muted);font-weight:500}
+.nav button:hover{background:var(--bg);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.badge{font-size:11px;font-weight:600;background:var(--bad);color:#fff;border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+.biz{margin-top:auto;border-top:1px solid var(--line);padding:12px 8px 0;font-size:12px;color:var(--muted)}
+.biz b{display:block;color:var(--ink);font-size:13px}
+main{padding:22px clamp(16px,3vw,32px);min-width:0}
+h1{font-family:var(--f-display);font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-family:var(--f-display);font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 18px}
+.note{font-size:12px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.kpi .v{font-family:var(--f-display);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi .d{font-size:12px;color:var(--good);font-weight:600}
+.cols{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px}
+.pill{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.p-ai{background:var(--ai-soft);color:var(--ai)} .p-h{background:var(--human-soft);color:var(--human)}
+.p-s{background:var(--accent-soft);color:var(--accent)} .p-n{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.list{display:flex;flex-direction:column}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:600}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.pri:hover{filter:brightness(1.08);color:var(--accent-ink)}
+/* conversations */
+.inbox{display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:12px;align-items:start}
+.conv{display:flex;gap:10px;padding:10px;border-radius:8px;border:0;background:none;width:100%;text-align:left;align-items:flex-start}
+.conv:hover,.conv[aria-current="true"]{background:var(--accent-soft)}
+.av{width:34px;height:34px;border-radius:50%;background:var(--ai-soft);color:var(--ai);display:grid;place-items:center;font-weight:700;flex:none}
+.conv .t{min-width:0;flex:1}
+.conv .t b,.conv .t span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv .t span{color:var(--muted);font-size:12px}
+.chat{display:flex;flex-direction:column;height:min(620px,calc(100vh - 150px));min-height:420px;padding:0;overflow:hidden}
+.chat-h{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.msgs{flex:1;overflow:auto;background:var(--chatbg);padding:14px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:78%;padding:7px 10px;border-radius:10px;background:var(--bubble-c);align-self:flex-start;white-space:pre-wrap;overflow-wrap:anywhere}
+.m.o{background:var(--bubble-o);align-self:flex-end}
+.m small{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+.m .who{font-weight:600;font-size:11px;margin-bottom:1px}
+.m.ai .who{color:var(--ai)} .m.h .who{color:var(--human)}
+.composer{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.composer input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:var(--bg)}
+.side-info{padding:10px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+/* funnel */
+.kan{display:grid;grid-template-columns:repeat(5,minmax(170px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:200px}
+.col h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.lead{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.lead b{font-size:13px}.lead .note{overflow-wrap:anywhere}
+.lead .acts{display:flex;gap:6px;flex-wrap:wrap}
+.lead .acts button{font-size:11px;padding:3px 8px}
+/* tables / forms */
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:480px}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}
+.form input,.set input,.set textarea,.set select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);width:100%}
+.set{display:grid;gap:14px;max-width:560px}
+.set label{display:grid;gap:4px;font-weight:600}
+.set label span.note{font-weight:400}
+.sw{display:flex;gap:10px;align-items:center;font-weight:600}
+/* simulator */
+.sim{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:16px;align-items:start}
+.phone{border:1px solid var(--line);border-radius:22px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;height:560px}
+.phone-h{background:var(--accent);color:var(--accent-ink);padding:12px 14px;font-weight:600;display:flex;gap:8px;align-items:center}
+.phone-h small{display:block;font-weight:400;opacity:.85}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;border-top:1px solid var(--line)}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:4px 10px;font-size:12px}
+.chips button:hover{border-color:var(--accent);color:var(--accent)}
+.log{font-family:var(--f-mono);font-size:12px;display:flex;flex-direction:column;gap:6px;max-height:480px;overflow:auto}
+.log div{border-left:3px solid var(--accent);padding:2px 0 2px 8px;background:var(--bg)}
+.log .k{color:var(--muted)}
+.typing{align-self:flex-start;color:var(--muted);font-size:12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-weight:600;z-index:9}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;flex-direction:column;gap:8px;padding:12px 16px;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{flex-direction:row;overflow-x:auto}.nav button{white-space:nowrap}.biz{display:none}
+  .cols,.inbox,.sim{grid-template-columns:minmax(0,1fr)}
+  .chat{height:520px}
+}
+@media (prefers-reduced-motion:no-preference){.view{animation:in .18s ease-out}@keyframes in{from{opacity:.4;transform:translateY(4px)}}}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">WhatsApp Sales Assistant<small>Prototipo navegable v0.3</small></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="biz"><b>Moda Caribe</b>Cartagena, Colombia<br>Datos de ejemplo</div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cop=n=>'$'+Number(n).toLocaleString('es-CO');
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const STAGES=['Nuevo','Interesado','Negociando','Cerrado','Perdido'];
+const now=()=>new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+
+const state={
+  view:'panel', sel:'c1', aiOn:true, tone:'Cercano',
+  hours:'Lunes a sábado, 9:00 a. m. a 6:00 p. m.',
+  products:[
+    {id:1,name:'Camiseta oversize algodón',price:59900,sizes:'S, M, L, XL',stock:34,kw:['camiseta','camisa','oversize']},
+    {id:2,name:'Jean mom fit',price:119900,sizes:'6, 8, 10, 12, 14',stock:12,kw:['jean','pantalon','mom']},
+    {id:3,name:'Vestido de lino',price:149900,sizes:'S, M, L',stock:7,kw:['vestido','lino']},
+    {id:4,name:'Gorra bordada',price:39900,sizes:'Única',stock:0,kw:['gorra']}],
+  faqs:[
+    {q:'Envíos',a:'Enviamos a todo el país con Servientrega en 2 a 4 días hábiles. El envío es gratis desde $200.000.',kw:['envio','enviar','domicilio','despacho']},
+    {q:'Pagos',a:'Recibimos Nequi, transferencia Bancolombia y contra entrega en Cartagena.',kw:['pago','pagar','nequi','transferencia','contraentrega']},
+    {q:'Horario',a:'',kw:['horario','hora','abren','atienden','abierto']}],
+  convs:[
+   {id:'c1',name:'Laura Pérez',phone:'+57 315 221 4408',stage:'Negociando',handoff:false,unread:0,msgs:[
+     {f:'c',t:'Hola, ¿cuánto cuesta el vestido de lino?',h:'9:12'},
+     {f:'ai',t:'¡Hola Laura! El vestido de lino cuesta $149.900. Hay tallas S, M y L (quedan 7 unidades). ¿Quieres que te lo separe?',h:'9:12'},
+     {f:'c',t:'Sí, talla M. ¿Envían a Barranquilla?',h:'9:14'},
+     {f:'ai',t:'Enviamos a todo el país con Servientrega en 2 a 4 días hábiles. El envío es gratis desde $200.000. ¿Me confirmas tu dirección para calcular el envío?',h:'9:14'}]},
+   {id:'c2',name:'Carlos Mejía',phone:'+57 300 876 1120',stage:'Interesado',handoff:true,unread:2,msgs:[
+     {f:'c',t:'Buenas, necesito 20 camisetas para mi equipo, ¿hay descuento por cantidad?',h:'8:40'},
+     {f:'ai',t:'Gracias por escribir, Carlos. Para pedidos grandes te conecto con un asesor que puede darte un precio especial.',h:'8:40'},
+     {f:'c',t:'Perfecto, quedo atento',h:'8:41'}]},
+   {id:'c3',name:'Daniela Ruiz',phone:'+57 312 450 7731',stage:'Cerrado',handoff:false,unread:0,msgs:[
+     {f:'c',t:'Quiero el jean mom fit talla 8',h:'ayer'},
+     {f:'ai',t:'Listo Daniela, tu pedido: Jean mom fit talla 8 por $119.900. Te paso los datos de pago por Nequi.',h:'ayer'},
+     {f:'c',t:'Pagado, gracias',h:'ayer'}]},
+   {id:'c4',name:'Andrés Torres',phone:'+57 320 998 3305',stage:'Nuevo',handoff:false,unread:1,msgs:[
+     {f:'c',t:'Hola, ¿a qué hora cierran?',h:'7:55'},
+     {f:'ai',t:'Atendemos de lunes a sábado, de 9:00 a. m. a 6:00 p. m.',h:'7:55'}]}
+  ],
+  log:[], simId:null
+};
+const conv=id=>state.convs.find(c=>c.id===id);
+const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,1800)};
+const pending=()=>state.convs.filter(c=>c.handoff).length;
+
+const VIEWS=[['panel','Panel'],['inbox','Conversaciones'],['funnel','Embudo de ventas'],['catalog','Catálogo y respuestas'],['sim','Simulador de cliente'],['set','Ajustes']];
+function nav(){
+  $('#nav').innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" ${state.view===k?'aria-current="page"':''}>${l}${k==='inbox'&&pending()?`<span class="badge">${pending()}</span>`:''}</button>`).join('');
+  $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.view=b.dataset.v;render()});
+}
+function render(){nav();const v=state.view;$('#main').innerHTML=`<div class="view">${({panel,inbox,funnel,catalog,sim,set})[v]()}</div>`;bind[v]&&bind[v]();}
+
+/* ---------- Panel ---------- */
+function panel(){
+  const total=state.convs.length, act=state.convs.filter(c=>['Interesado','Negociando'].includes(c.stage)).length, won=state.convs.filter(c=>c.stage==='Cerrado').length;
+  const rate=Math.round(won/total*100);
+  const data=[12,18,15,22,19,9,total+14], days=['Lun','Mar','Mié','Jue','Vie','Sáb','Hoy'];
+  const W=420,H=170,pl=28,pb=24,max=25,bw=34,step=(W-pl-8)/7;
+  const bars=data.map((v,i)=>{const h=(H-pb-8)*v/max,x=pl+i*step+(step-bw)/2,y=H-pb-h;
+    return `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="3" fill="${i===6?'var(--accent)':'var(--ai-soft)'}" stroke="${i===6?'none':'var(--ai)'}" stroke-width="1"/><text x="${x+bw/2}" y="${y-4}" text-anchor="middle" font-size="10" fill="var(--ink)">${v}</text><text x="${x+bw/2}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${days[i]}</text>`}).join('');
+  const grid=[0,10,20].map(g=>{const y=H-pb-(H-pb-8)*g/max;return `<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${pl-5}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--muted)">${g}</text>`}).join('');
+  const att=state.convs.filter(c=>c.handoff);
+  return `<h1>Panel</h1><p class="sub">Resumen comercial de Moda Caribe, jueves 8 de octubre.</p>
+  <div class="grid4">
+   <div class="card kpi"><div class="v">${total+14}</div><div class="l">Conversaciones hoy</div><div class="d">+18 % vs. ayer</div></div>
+   <div class="card kpi"><div class="v">4 s</div><div class="l">Tiempo medio de respuesta</div><div class="d">antes: 38 min</div></div>
+   <div class="card kpi"><div class="v">${act}</div><div class="l">Leads en seguimiento</div></div>
+   <div class="card kpi"><div class="v">${rate} %</div><div class="l">Conversión a venta</div></div>
+  </div>
+  <div class="cols">
+   <div class="card"><h2>Conversaciones por día</h2><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Conversaciones por día en la última semana">${grid}${bars}</svg><p class="note">Datos de ejemplo para el prototipo.</p></div>
+   <div class="card"><h2>Requieren a una persona</h2>${att.length?`<div class="list">${att.map(c=>`<div class="row"><div><b>${esc(c.name)}</b><div class="note">${esc(c.msgs[c.msgs.length-1].t).slice(0,60)}</div></div><button class="btn pri" data-open="${c.id}">Atender</button></div>`).join('')}</div>`:'<p class="note">Nada pendiente. La IA está atendiendo todas las conversaciones.</p>'}</div>
+  </div>`;
+}
+bind={};
+bind.panel=()=>document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{state.sel=b.dataset.open;state.view='inbox';render()});
+
+/* ---------- Inbox ---------- */
+function msgHTML(m){const who=m.f==='c'?'':m.f==='ai'?'<div class="who">Asistente IA</div>':'<div class="who">Tú (humano)</div>';
+  return `<div class="m ${m.f==='c'?'':'o'} ${m.f}">${who}${esc(m.t)}<small>${m.h}</small></div>`}
+function inbox(){
+  const c=conv(state.sel)||state.convs[0];
+  return `<h1>Conversaciones</h1><p class="sub">Todo lo que entra por WhatsApp, en un solo lugar y con historial.</p>
+  <div class="inbox"><div class="card" style="padding:6px"><div class="list">${state.convs.map(x=>`<button class="conv" data-c="${x.id}" aria-current="${x.id===c.id}"><div class="av">${esc(x.name[0])}</div><div class="t"><b>${esc(x.name)}</b><span>${esc(x.msgs[x.msgs.length-1].t)}</span></div><div>${x.handoff?'<span class="pill p-h">Humano</span>':'<span class="pill p-ai">IA</span>'}</div></button>`).join('')}</div></div>
+  <div class="card chat"><div class="chat-h"><div><b>${esc(c.name)}</b> <span class="note">${esc(c.phone)}</span></div><div style="display:flex;gap:8px;align-items:center"><span class="pill p-s">${c.stage}</span><button class="btn" id="tog">${c.handoff?'Devolver a la IA':'Tomar el control'}</button></div></div>
+  <div class="msgs" id="msgs">${c.msgs.map(msgHTML).join('')}</div>
+  <form class="composer" id="f"><input id="txt" autocomplete="off" placeholder="${c.handoff?'Escribe como asesor…':'La IA responde. Toma el control para escribir.'}" ${c.handoff?'':'disabled'}><button class="btn pri" ${c.handoff?'':'disabled'}>Enviar</button></form></div></div>`;
+}
+bind.inbox=()=>{
+  const c=conv(state.sel)||state.convs[0]; c.unread=0;
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{state.sel=b.dataset.c;render()});
+  $('#tog').onclick=()=>{c.handoff=!c.handoff;toast(c.handoff?'Ahora atiendes tú esta conversación':'La IA retomó la conversación');render()};
+  $('#f').onsubmit=e=>{e.preventDefault();const t=$('#txt').value.trim();if(!t)return;c.msgs.push({f:'h',t,h:now()});render()};
+  const m=$('#msgs');m.scrollTop=m.scrollHeight;
+};
+
+/* ---------- Funnel ---------- */
+function funnel(){
+  return `<h1>Embudo de ventas</h1><p class="sub">Cada cliente se clasifica solo según lo que dice en el chat. También puedes moverlo a mano.</p>
+  <div class="kan">${STAGES.map(s=>{const l=state.convs.filter(c=>c.stage===s);return `<div class="col"><h3>${s}<span>${l.length}</span></h3>${l.map(c=>`<div class="lead"><b>${esc(c.name)}</b><span class="note">${esc(c.phone)}</span><span class="note">${esc(c.msgs[c.msgs.length-1].t).slice(0,70)}</span><div class="acts">${STAGES.indexOf(s)>0?`<button class="btn" data-mv="${c.id}" data-d="-1">←</button>`:''}${STAGES.indexOf(s)<4?`<button class="btn" data-mv="${c.id}" data-d="1">→</button>`:''}<button class="btn" data-open="${c.id}">Abrir</button></div></div>`).join('')||'<span class="note">Sin clientes</span>'}</div>`}).join('')}</div>`;
+}
+bind.funnel=()=>{
+  document.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const c=conv(b.dataset.mv);c.stage=STAGES[STAGES.indexOf(c.stage)+ +b.dataset.d];render()});
+  bind.panel();
+};
+
+/* ---------- Catalog ---------- */
+function catalog(){
+  return `<h1>Catálogo y respuestas</h1><p class="sub">La IA responde únicamente con esta información. Si algo no está aquí, pasa la conversación a una persona.</p>
+  <div class="card" style="margin-bottom:12px"><h2>Productos</h2><div class="tw"><table><thead><tr><th>Producto</th><th class="n">Precio</th><th>Tallas</th><th class="n">Stock</th></tr></thead><tbody>${state.products.map(p=>`<tr><td>${esc(p.name)}</td><td class="n">${cop(p.price)}</td><td>${esc(p.sizes)}</td><td class="n">${p.stock?p.stock:'<span class="pill p-h">Agotado</span>'}</td></tr>`).join('')}</tbody></table></div>
+  <form class="form" id="pf"><input id="pn" placeholder="Nombre" required><input id="pp" type="number" min="0" placeholder="Precio en COP" required><input id="ps" placeholder="Tallas"><input id="pk" type="number" min="0" placeholder="Stock" required><button class="btn pri">Agregar producto</button></form></div>
+  <div class="card"><h2>Preguntas frecuentes</h2><div class="list">${state.faqs.map(f=>`<div class="row"><div><b>${f.q}</b><div class="note">${esc(f.a||state.hours)}</div></div></div>`).join('')}</div></div>`;
+}
+bind.catalog=()=>{$('#pf').onsubmit=e=>{e.preventDefault();const n=$('#pn').value.trim();state.products.push({id:Date.now(),name:n,price:+$('#pp').value,sizes:$('#ps').value||'Única',stock:+$('#pk').value,kw:norm(n).split(' ').filter(w=>w.length>3)});toast('Producto agregado');render()}};
+
+/* ---------- Settings ---------- */
+function set(){
+  return `<h1>Ajustes</h1><p class="sub">Controla cómo habla la IA y cuándo pasa el chat a una persona.</p>
+  <div class="card set"><div class="sw"><input type="checkbox" id="ai" ${state.aiOn?'checked':''} style="width:auto"><label for="ai" style="display:inline">Asistente IA activo</label></div>
+  <label>Tono de las respuestas<select id="tone">${['Cercano','Formal','Breve'].map(t=>`<option ${t===state.tone?'selected':''}>${t}</option>`).join('')}</select></label>
+  <label>Horario de atención<input id="hrs" value="${esc(state.hours)}"><span class="note">La IA lo usa para responder cuando preguntan por el horario.</span></label>
+  <label>Pasar a una persona cuando el cliente<textarea id="hand" rows="3">pida hablar con un asesor, pida precios por mayor o escriba una queja</textarea></label>
+  <button class="btn pri" id="sv" style="justify-self:start">Guardar cambios</button></div>`;
+}
+bind.set=()=>{$('#sv').onclick=()=>{state.aiOn=$('#ai').checked;state.tone=$('#tone').value;state.hours=$('#hrs').value;toast('Cambios guardados')}};
+
+/* ---------- Simulator (customer side + bot) ---------- */
+function bot(raw,c){
+  const t=norm(raw), out={intent:'',reply:'',stage:null,handoff:false,data:''};
+  const prod=state.products.find(p=>p.kw.some(k=>t.includes(k)));
+  const tone=s=>state.tone==='Formal'?s.replace(/^¡?Hola[^.!]*[.!]\s*/,'Buen día. '):s;
+  if(/asesor|persona|humano|queja|reclamo|mayor|por cantidad|descuento/.test(t)){
+    out.intent='escalar_a_humano';out.handoff=true;out.reply='Con gusto. Te conecto con un asesor de Moda Caribe para ayudarte mejor. Te escribe en unos minutos.';
+  } else if(/quiero|comprar|pedido|separ|me llevo|lo compro/.test(t)){
+    if(prod&&prod.stock){const size=(raw.match(/talla\s*(\w+)/i)||[])[1];out.intent='crear_pedido';out.stage='Negociando';out.data=`producto="${prod.name}"${size?`, talla=${size.toUpperCase()}`:''}`;
+      out.reply=`Listo, anoto tu pedido: ${prod.name}${size?` talla ${size.toUpperCase()}`:''} por ${cop(prod.price)}. ¿A qué ciudad lo enviamos y cómo prefieres pagar?`;}
+    else if(prod){out.intent='sin_stock';out.stage='Interesado';out.reply=`Por ahora ${prod.name} está agotado. Puedo avisarte cuando vuelva a haber. ¿Te interesa otro producto?`}
+    else{out.intent='pedido_sin_producto';out.reply='¡Claro! ¿Cuál producto te interesa? Tenemos '+state.products.filter(p=>p.stock).map(p=>p.name.toLowerCase()).join(', ')+'.'}
+  } else if(prod&&/cuanto|precio|vale|cuesta|talla|hay|tienen|disponible/.test(t)){
+    out.intent='consultar_producto';out.stage='Interesado';out.data=`producto="${prod.name}"`;
+    out.reply=prod.stock?`${prod.name}: ${cop(prod.price)}. Tallas ${prod.sizes}. Quedan ${prod.stock} unidades. ¿Quieres que te lo separe?`:`${prod.name} está agotado por ahora. ¿Te muestro algo parecido?`;
+  } else if(prod){out.intent='consultar_producto';out.stage='Interesado';out.reply=`${prod.name} cuesta ${cop(prod.price)}. ¿Qué talla buscas?`}
+  else{
+    const f=state.faqs.find(f=>f.kw.some(k=>t.includes(k)));
+    if(f){out.intent='faq:'+f.q.toLowerCase();out.reply=f.a||'Atendemos '+state.hours.charAt(0).toLowerCase()+state.hours.slice(1)+'.';}
+    else if(/^(hola|buenas|buen dia|buenos|hey)/.test(t)){out.intent='saludo';out.reply='¡Hola! Soy el asistente de Moda Caribe. Puedo darte precios, tallas, envíos y tomar tu pedido. ¿Qué buscas hoy?'}
+    else{out.intent='fuera_de_alcance';out.handoff=true;out.reply='No tengo esa información a la mano. Le paso tu mensaje a un asesor para que te responda.'}
+  }
+  out.reply=tone(out.reply);if(state.tone==='Breve')out.reply=out.reply.split('. ').slice(0,2).join('. ').replace(/\.?$/,'.');
+  return out;
+}
+function sim(){
+  const c=conv(state.simId);
+  return `<h1>Simulador de cliente</h1><p class="sub">Escribe como si fueras un cliente. A la derecha ves lo que el sistema entiende y guarda.</p>
+  <div class="sim"><div class="phone"><div class="phone-h"><div class="av" style="background:var(--accent-ink);color:var(--accent)">M</div><div>Moda Caribe<small>cuenta de empresa</small></div></div>
+  <div class="msgs" id="smsgs">${c?c.msgs.map(m=>`<div class="m ${m.f==='c'?'o':''}">${esc(m.t)}<small>${m.h}</small></div>`).join(''):'<span class="note" style="align-self:center;margin-top:20px">Escribe un mensaje para iniciar el chat.</span>'}</div>
+  <div class="chips">${['Hola','¿Cuánto cuesta el vestido?','¿Hacen envíos?','Quiero el jean talla 10','¿Tienen gorras?','Quiero hablar con un asesor'].map(x=>`<button data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+  <form class="composer" id="sf"><input id="stxt" autocomplete="off" placeholder="Escribe un mensaje"><button class="btn pri">Enviar</button></form></div>
+  <div class="card"><h2>Lo que registra el sistema</h2><div class="log" id="log">${state.log.length?state.log.map(l=>`<div><span class="k">intención</span> ${esc(l.intent)}<br><span class="k">etapa del embudo</span> ${l.stage}${l.data?`<br><span class="k">datos</span> ${esc(l.data)}`:''}${l.handoff?'<br><span class="k">acción</span> pasa a una persona':''}</div>`).join(''):'<span class="note">Aún no hay mensajes procesados.</span>'}</div></div></div>`;
+}
+bind.sim=()=>{
+  const m=$('#smsgs');m.scrollTop=m.scrollHeight;
+  const send=txt=>{
+    if(!txt.trim())return;
+    if(!state.simId){state.simId='sim';state.convs.unshift({id:'sim',name:'Cliente de prueba',phone:'+57 300 000 0000',stage:'Nuevo',handoff:false,unread:0,msgs:[]})}
+    const c=conv('sim');c.msgs.push({f:'c',t:txt,h:now()});c.unread++;
+    if(state.view==='sim'){render();const mm=$('#smsgs');mm.insertAdjacentHTML('beforeend','<div class="typing">escribiendo…</div>');mm.scrollTop=mm.scrollHeight;}
+    if(c.handoff||!state.aiOn){return}
+    setTimeout(()=>{const r=bot(txt,c);c.msgs.push({f:'ai',t:r.reply,h:now()});
+      if(r.stage&&STAGES.indexOf(r.stage)>STAGES.indexOf(c.stage))c.stage=r.stage;
+      if(r.handoff)c.handoff=true;
+      state.log.unshift({intent:r.intent,stage:c.stage,data:r.data,handoff:r.handoff});
+      if(state.view==='sim')render();nav();},650);
+  };
+  $('#sf').onsubmit=e=>{e.preventDefault();const v=$('#stxt').value;$('#stxt').value='';send(v)};
+  document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>send(b.dataset.q));
+};
+render();
+</script>
