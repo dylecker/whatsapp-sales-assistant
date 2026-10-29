@@ -1,0 +1,54 @@
+digraph arquitectura {
+  graph [rankdir=TB, fontname="Inter", fontsize=11, nodesep=0.35, ranksep=0.5, pad=0.3, bgcolor="white", compound=true, newrank=true];
+  node  [fontname="Inter", fontsize=11, shape=box, style="rounded,filled", fillcolor="#F4F6F8", color="#5B6770", penwidth=1.2, margin="0.16,0.09"];
+  edge  [fontname="Inter", fontsize=8.5, color="#5B6770", arrowsize=0.7];
+
+  cliente [label="Cliente final\n(WhatsApp)", shape=box, fillcolor="#FFFFFF"];
+  equipo  [label="Propietario /\nvendedor", fillcolor="#FFFFFF"];
+
+  subgraph cluster_meta {
+    label="Meta"; style="rounded,dashed"; color="#8A949C"; fontname="Inter"; fontsize=10;
+    wa [label="WhatsApp Business Platform\n(Cloud API + webhooks)", fillcolor="#E6F4EA", color="#2E7D32"];
+  }
+
+  subgraph cluster_panel {
+    label="Frontend"; style="rounded,dashed"; color="#8A949C"; fontname="Inter"; fontsize=10;
+    panel [label="Panel web\nReact + TypeScript\n(hoy: prototipo HTML)", fillcolor="#FFF4E0", color="#B26A00", style="rounded,filled,dashed"];
+  }
+
+  subgraph cluster_backend {
+    label="Backend (Python)  -  implementado y probado"; style="rounded,filled"; fillcolor="#F0F7FF"; color="#1F5FA8"; fontname="Inter"; fontsize=10;
+    api  [label="API HTTP\nWebhook + REST del panel\nFirma HMAC · JWT", fillcolor="#DCEBFA", color="#1F5FA8"];
+    svc  [label="Servicio de conversacion\n(flujo 1): consentimiento,\ntraspaso, embudo, pedidos,\ncontrol de veracidad", fillcolor="#DCEBFA", color="#1F5FA8"];
+    ret  [label="Recuperacion de\ncontexto (catalogo\ny preguntas frecuentes)", fillcolor="#DCEBFA", color="#1F5FA8"];
+    llm  [label="Capa de abstraccion\ndel LLM: proveedor local\ny proveedor por API", fillcolor="#DCEBFA", color="#1F5FA8"];
+    snd  [label="Envio a WhatsApp\n(simulado / Cloud API)", fillcolor="#DCEBFA", color="#1F5FA8"];
+  }
+
+  subgraph cluster_data {
+    label="Datos"; style="rounded,dashed"; color="#8A949C"; fontname="Inter"; fontsize=10;
+    db [label="Base de datos relacional\n10 entidades por negocio\nSQLite (prototipo)\nPostgreSQL + pgvector (objetivo)", shape=cylinder, fillcolor="#DCEBFA", color="#1F5FA8"];
+  }
+
+  ext_llm [label="Proveedor de modelo\nde lenguaje (API externa)", fillcolor="#FFF4E0", color="#B26A00", style="rounded,filled,dashed"];
+
+  cliente -> wa [label="mensaje"];
+  wa -> api [label="POST /webhook\nHTTPS + firma"];
+  api -> svc [label="mensaje\nverificado"];
+  svc -> ret [label="consulta"];
+  ret -> db [label="SELECT"];
+  svc -> llm [label="contexto +\nhistorial"];
+  llm -> ext_llm [label="HTTPS", style=dashed];
+  svc -> db [label="mensajes, etapas,\npedidos"];
+  svc -> snd [label="respuesta"];
+  snd -> wa [label="POST /messages", style=dashed];
+  wa -> cliente [label="respuesta"];
+
+  equipo -> panel [label="usa"];
+  panel -> api [label="REST + JWT", style=dashed];
+  api -> db [label="lectura y\nconfiguracion"];
+
+  { rank=same; cliente; equipo; }
+  { rank=same; wa; panel; }
+
+}

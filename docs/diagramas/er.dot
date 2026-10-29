@@ -1,0 +1,39 @@
+digraph er {
+  graph [rankdir=TB, fontname="Inter", fontsize=11, nodesep=0.3, ranksep=0.6, pad=0.2, bgcolor="white"];
+  node [shape=none, fontname="Inter", fontsize=11, margin=0];
+  edge [fontname="Inter", fontsize=10, color="#5B6770", arrowsize=0.8, dir=both, arrowtail=none, arrowhead=crow];
+  NEGOCIO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>NEGOCIO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26"></td><td align="left">nombre</td></tr><tr><td align="left" width="26">UQ</td><td align="left">whatsapp_phone_number_id</td></tr><tr><td align="left" width="26"></td><td align="left">tono, horario, ia_activa</td></tr></table>>];
+  USUARIO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>USUARIO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">negocio_id</td></tr><tr><td align="left" width="26">UQ</td><td align="left">correo</td></tr><tr><td align="left" width="26"></td><td align="left">rol: propietario | vendedor</td></tr></table>>];
+  CLIENTE [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>CLIENTE</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">negocio_id</td></tr><tr><td align="left" width="26">UQ</td><td align="left">(negocio_id, telefono)</td></tr><tr><td align="left" width="26"></td><td align="left">consentimiento_datos</td></tr></table>>];
+  PRODUCTO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>PRODUCTO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">negocio_id</td></tr><tr><td align="left" width="26"></td><td align="left">precio_cop, stock, tallas</td></tr></table>>];
+  PREGUNTA_FRECUENTE [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>PREGUNTA_FRECUENTE</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">negocio_id</td></tr><tr><td align="left" width="26"></td><td align="left">tema, respuesta, palabras_clave</td></tr></table>>];
+  CONVERSACION [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>CONVERSACION</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">negocio_id, cliente_id</td></tr><tr><td align="left" width="26">FK</td><td align="left">asignado_a</td></tr><tr><td align="left" width="26"></td><td align="left">etapa, modo, abierta</td></tr></table>>];
+  MENSAJE [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>MENSAJE</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">conversacion_id</td></tr><tr><td align="left" width="26">FK</td><td align="left">usuario_id</td></tr><tr><td align="left" width="26">UQ</td><td align="left">wa_message_id</td></tr><tr><td align="left" width="26"></td><td align="left">remitente: cliente | ia | humano</td></tr></table>>];
+  EVENTO_EMBUDO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>EVENTO_EMBUDO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">conversacion_id, usuario_id</td></tr><tr><td align="left" width="26"></td><td align="left">etapa_anterior, etapa_nueva, origen</td></tr></table>>];
+  PEDIDO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>PEDIDO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">conversacion_id, cliente_id</td></tr><tr><td align="left" width="26"></td><td align="left">ciudad, estado</td></tr></table>>];
+  ITEM_PEDIDO [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" color="#1F5FA8"><tr><td bgcolor="#1F5FA8" colspan="2"><font color="white"><b>ITEM_PEDIDO</b></font></td></tr><tr><td align="left" width="26">PK</td><td align="left">id</td></tr><tr><td align="left" width="26">FK</td><td align="left">pedido_id, producto_id</td></tr><tr><td align="left" width="26"></td><td align="left">talla, cantidad, precio_unitario_cop</td></tr></table>>];
+  NEGOCIO -> USUARIO [taillabel="1", headlabel="N", labeldistance=1.6];
+  NEGOCIO -> CLIENTE [taillabel="1", headlabel="N", labeldistance=1.6];
+  NEGOCIO -> PRODUCTO [taillabel="1", headlabel="N", labeldistance=1.6];
+  NEGOCIO -> PREGUNTA_FRECUENTE [taillabel="1", headlabel="N", labeldistance=1.6];
+  CLIENTE -> CONVERSACION [taillabel="1", headlabel="N", labeldistance=1.6 label="tiene"];
+  USUARIO -> CONVERSACION [taillabel="0..1", headlabel="N", labeldistance=1.6 label="atiende" style=dashed];
+  CONVERSACION -> MENSAJE [taillabel="1", headlabel="N", labeldistance=1.6];
+  CONVERSACION -> EVENTO_EMBUDO [taillabel="1", headlabel="N", labeldistance=1.6];
+  CONVERSACION -> PEDIDO [taillabel="1", headlabel="N", labeldistance=1.6];
+  PEDIDO -> ITEM_PEDIDO [taillabel="1", headlabel="1..N", labeldistance=1.6];
+  PRODUCTO -> ITEM_PEDIDO [taillabel="1", headlabel="N", labeldistance=1.6 label="se vende en"];
+  { rank=same; NEGOCIO; PREGUNTA_FRECUENTE; }
+  { rank=same; USUARIO; CLIENTE; PRODUCTO; }
+  { rank=same; MENSAJE; EVENTO_EMBUDO; PEDIDO; }
+}

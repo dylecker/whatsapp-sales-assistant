@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Bases de datos locales del prototipo
+*.db
+*.db-wal
+*.db-shm

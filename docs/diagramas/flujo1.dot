@@ -1,0 +1,42 @@
+digraph flujo1 {
+  graph [rankdir=TB, fontname="Inter", fontsize=11, nodesep=0.3, ranksep=0.26, pad=0.2, bgcolor="white"];
+  node  [fontname="Inter", fontsize=11, shape=box, style="rounded,filled", fillcolor="#DCEBFA", color="#1F5FA8", penwidth=1.2, margin="0.12,0.06"];
+  edge  [fontname="Inter", fontsize=10, color="#5B6770", arrowsize=0.7];
+
+  ini   [label="Llega un mensaje por el webhook", shape=oval, fillcolor="#E6F4EA", color="#2E7D32"];
+  firma [label="¿Firma HMAC\nvalida?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  rech  [label="Rechazar (HTTP 403)\nno se guarda nada", fillcolor="#FDECEA", color="#C62828"];
+  dup   [label="¿Mensaje\nduplicado?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  ign   [label="Ignorar", fillcolor="#F4F6F8", color="#5B6770"];
+  guard [label="Buscar o crear cliente y conversacion\nGuardar mensaje (remitente = cliente)"];
+  modo  [label="¿Modo\nhumano?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  aviso [label="Marcar «requiere atencion»\nLa IA no responde", fillcolor="#FFF4E0", color="#B26A00"];
+  cons  [label="¿Autorizo el\ntratamiento\nde datos?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  pedir [label="Enviar aviso Ley 1581\n(o registrar «ACEPTO»)", fillcolor="#FFF4E0", color="#B26A00"];
+  llm   [label="Recuperar contexto (catalogo, FAQ, historial, borrador)\nEl modelo identifica la intencion y redacta\nusando solo ese contexto"];
+  ver   [label="¿Respuesta verificada\ny modelo disponible?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  hum   [label="¿Asesor, queja o\nsin informacion?", shape=diamond, fillcolor="#FFFFFF", margin="0.0,0.0"];
+  tras  [label="Pasar a modo humano\nAlertar al panel y avisar al cliente", fillcolor="#FFF4E0", color="#B26A00"];
+  fin   [label="Guardar datos detectados y actualizar el embudo\nEnviar respuesta y guardarla (remitente = IA)"];
+
+  ini -> firma;
+  firma -> rech [label=" no"];
+  firma -> dup [label=" si"];
+  dup -> ign [label=" si"];
+  dup -> guard [label=" no"];
+  guard -> modo;
+  modo -> aviso [label=" si"];
+  modo -> cons [label=" no"];
+  cons -> pedir [label=" no"];
+  cons -> llm [label=" si"];
+  llm -> ver;
+  ver -> tras [label=" no"];
+  ver -> hum [label=" si"];
+  hum -> tras [label=" si"];
+  hum -> fin [label=" no"];
+  { rank=same; firma; rech; }
+  { rank=same; dup; ign; }
+  { rank=same; modo; aviso; }
+  { rank=same; cons; pedir; }
+  { rank=same; hum; tras; }
+}
