@@ -4,8 +4,11 @@ El flujo principal solo conoce `LLMProvider.generate()`. Implementaciones:
 
 * `RuleBasedProvider`: local, determinista y sin red. Redacta SOLO con el contexto
   recuperado (catalogo y preguntas frecuentes). Es lo que usan las pruebas y la demo.
-* `AnthropicProvider`: llama a la API de Anthropic. Esta escrito pero NO se ejecuto en
-  el entorno de desarrollo del avance (sin acceso a la red ni a clave de API).
+* `OpenAICompatProvider`: cualquier servidor con el formato de chat completions de OpenAI.
+  Sirve para modelos gratuitos en la nube (NVIDIA build.nvidia.com) y para modelos locales
+  (Ollama), solo cambiando `WSA_LLM_BASE_URL`, `WSA_LLM_MODEL` y `WSA_LLM_API_KEY`.
+* `AnthropicProvider`: llama a la API de Anthropic (de pago; escrito, no ejecutado).
+* `MeteredProvider`: envuelve a cualquiera y mide llamadas, tokens y latencia (analisis de costos).
 
 Cualquier proveedor pasa por la misma validacion de veracidad en el servicio
 (ningun precio puede salir de algo distinto al catalogo recuperado).
@@ -15,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -307,7 +311,124 @@ class AnthropicProvider:
             sin_informacion=bool(crudo.get("sin_informacion")))
 
 
+# ---------------------------------------------------------------- OpenAI-compatible (NVIDIA / Ollama)
+
+SYSTEM_PROMPT_COMPAT = (
+    "Eres el asistente de ventas por WhatsApp de un negocio pequeno en Colombia. Responde en espanol, corto y claro, "
+    "con el tono indicado (cercano o formal).\n"
+    "REGLAS:\n"
+    "1. Los precios, tallas y stock SOLO pueden salir de la lista 'productos' del contexto. Copialos tal cual; "
+    "nunca los calcules de memoria ni los inventes. Las politicas SOLO salen de 'preguntas_frecuentes'.\n"
+    "2. Si el producto no esta en el contexto o falta informacion, no inventes: pon sin_informacion=true y pide aclarar.\n"
+    "3. Si el cliente pide hablar con una persona o se queja, pon requiere_humano=true y motivo='solicitud_cliente' o 'queja'.\n"
+    "4. Para un pedido necesitas producto_id, talla (si el producto tiene tallas), cantidad y ciudad. Pideles lo que falte "
+    "de a poco, guarda lo que ya dijo en 'borrador' y pon pedido_listo=true solo cuando esten todos los datos y la "
+    "cantidad no supere el stock. Nunca pidas datos de pago.\n"
+    "Responde UNICAMENTE un objeto JSON, sin texto adicional, con las claves: intencion (consulta|pedido|queja|"
+    "solicitud_asesor|saludo|faq|otra), respuesta (texto para el cliente), borrador (objeto con producto_id, talla, "
+    "cantidad, ciudad), pedido_listo (bool), requiere_humano (bool), motivo (string o null), sin_informacion (bool)."
+)
+
+
+def _extraer_json(texto: str) -> dict:
+    """Saca el objeto JSON de la salida del modelo (tolera <think>, ```json y texto alrededor)."""
+    texto = re.sub(r"<think>.*?</think>", "", texto, flags=re.S)
+    inicio, fin = texto.find("{"), texto.rfind("}")
+    if inicio < 0 or fin <= inicio:
+        raise ValueError("La respuesta del modelo no contiene JSON")
+    return json.loads(texto[inicio:fin + 1])
+
+
+def _a_resultado(crudo: dict) -> LLMResult:
+    borrador = crudo.get("borrador")
+    return LLMResult(
+        intencion=str(crudo.get("intencion") or "otra"), respuesta=str(crudo["respuesta"]),
+        borrador=borrador if isinstance(borrador, dict) else {},
+        pedido_listo=bool(crudo.get("pedido_listo")), requiere_humano=bool(crudo.get("requiere_humano")),
+        motivo=crudo.get("motivo"), sin_informacion=bool(crudo.get("sin_informacion")))
+
+
+def _contexto(req: LLMRequest) -> dict:
+    return {
+        "negocio": req.negocio_nombre, "tono": req.tono, "mensaje_cliente": req.mensaje,
+        "historial": req.historial[-8:], "borrador_pedido": req.borrador,
+        "productos": [{k: p[k] for k in ("id", "nombre", "categoria", "precio_cop", "tallas", "stock")}
+                      for p in req.productos],
+        "preguntas_frecuentes": [{"tema": f["tema"], "respuesta": f["respuesta"]} for f in req.faqs],
+    }
+
+
+class OpenAICompatProvider:
+    """Cliente de /chat/completions con el formato de OpenAI.
+
+    NVIDIA (nube, gratis con cuenta):  base_url=https://integrate.api.nvidia.com/v1
+    Ollama (local):                    base_url=http://localhost:11434/v1  (api_key cualquiera)
+    """
+
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, model: str | None = None,
+                 timeout: int = 60):
+        self.base_url = (base_url or os.environ["WSA_LLM_BASE_URL"]).rstrip("/")
+        self.api_key = api_key or os.getenv("WSA_LLM_API_KEY", "ollama")
+        self.model = model or os.environ["WSA_LLM_MODEL"]
+        self.timeout = timeout
+        self.last_usage: dict = {}
+
+    def generate(self, req: LLMRequest) -> LLMResult:
+        cuerpo = json.dumps({
+            "model": self.model, "temperature": 0, "max_tokens": 500,
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT_COMPAT},
+                         {"role": "user", "content": json.dumps(_contexto(req), ensure_ascii=False)}],
+        }).encode()
+        http = urllib.request.Request(
+            self.base_url + "/chat/completions", data=cuerpo, method="POST",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
+        t0 = time.perf_counter()
+        with urllib.request.urlopen(http, timeout=self.timeout) as r:
+            data = json.loads(r.read())
+        uso = data.get("usage") or {}
+        self.last_usage = {"prompt_tokens": uso.get("prompt_tokens", 0),
+                           "completion_tokens": uso.get("completion_tokens", 0),
+                           "latency_s": time.perf_counter() - t0}
+        texto = data["choices"][0]["message"].get("content") or ""
+        return _a_resultado(_extraer_json(texto))
+
+
+class MeteredProvider:
+    """Envuelve un proveedor y acumula llamadas, tokens, latencia y la ultima salida cruda."""
+
+    def __init__(self, inner: LLMProvider):
+        self.inner = inner
+        self.calls: list[dict] = []
+        self.last_result: LLMResult | None = None
+
+    def generate(self, req: LLMRequest) -> LLMResult:
+        t0 = time.perf_counter()
+        try:
+            res = self.inner.generate(req)
+        except Exception:
+            self.calls.append({"ok": False, "latency_s": time.perf_counter() - t0,
+                               "prompt_tokens": 0, "completion_tokens": 0})
+            self.last_result = None
+            raise
+        uso = dict(getattr(self.inner, "last_usage", {}) or {})
+        self.calls.append({"ok": True, "latency_s": uso.get("latency_s", time.perf_counter() - t0),
+                           "prompt_tokens": uso.get("prompt_tokens", 0),
+                           "completion_tokens": uso.get("completion_tokens", 0)})
+        self.last_result = res
+        return res
+
+
+PRESETS = {
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "meta/llama-3.1-70b-instruct"),
+    "ollama": ("http://localhost:11434/v1", "qwen2.5:3b"),
+}
+
+
 def build_provider(nombre: str) -> LLMProvider:
     if nombre == "anthropic":
         return AnthropicProvider()
+    if nombre in PRESETS or nombre == "openai":
+        url, modelo = PRESETS.get(nombre, (None, None))
+        return OpenAICompatProvider(base_url=os.getenv("WSA_LLM_BASE_URL", url),
+                                    model=os.getenv("WSA_LLM_MODEL", modelo))
     return RuleBasedProvider()
