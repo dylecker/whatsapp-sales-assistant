@@ -122,3 +122,75 @@ def test_precios_con_cualquier_separador_de_miles(texto, esperado):
 def test_respuesta_con_coma_de_miles_correcta_no_se_bloquea():
     assert verificar("El precio de la camiseta oversize negra es de $59,900 COP.", PRODUCTOS).ok
     assert not verificar("El precio es de $49,900 COP.", PRODUCTOS).ok
+
+
+@pytest.mark.parametrize("texto,ok", [
+    ("El vestido lino beige cuesta 119900. Hay tallas S, M y L.", False),     # monto sin $ ni COP
+    ("Vestido lino beige por 49900", False),
+    ("Camiseta oversize negra por 59900 COP.", True),
+    ("Camiseta oversize negra: 59.900", True),
+    ("Estamos desde 2026 a su servicio.", True),                               # un anio no es un precio
+    ("Tu pedido #1234 esta en camino.", True),
+])
+def test_montos_sueltos(texto, ok):
+    assert verificar(texto, PRODUCTOS).ok == ok
+
+
+def test_pregunta_con_la_talla_del_cliente_no_se_bloquea():
+    assert verificar("¿Tienes la talla XXL en mente?", PRODUCTOS, mensaje_cliente="hay en talla XXL?").ok
+    assert not verificar("¿Te sirve la talla XXL?", PRODUCTOS, mensaje_cliente="que tallas hay").ok
+
+
+def _req_h(msg, borrador=None):
+    return LLMRequest("Moda Caribe", "cercano", msg, [], PRODUCTOS, [], borrador or {})
+
+
+class _ModeloQueNoTraspasa:
+    """Simula un modelo pequeno que responde amable pero se olvida de requiere_humano."""
+    def __init__(self):
+        self.llamadas = 0
+        self.last_usage = {}
+
+    def generate(self, req):
+        self.llamadas += 1
+        return LLMResult("otra", "Entendido, cuentame mas.")
+
+
+def test_hibrido_traspasa_con_reglas_aunque_el_modelo_no_lo_haga():
+    from app.llm import HybridProvider
+    m = _ModeloQueNoTraspasa()
+    h = HybridProvider(m)
+    for msg in ("quiero hablar con un asesor", "tengo una queja, llego danado"):
+        r = h.generate(_req_h(msg))
+        assert r.requiere_humano and not h.usado_llm
+    assert m.llamadas == 0
+
+
+def test_hibrido_usa_el_modelo_para_lenguaje_libre_y_reglas_si_falla():
+    from app.llm import HybridProvider
+    m = _ModeloQueNoTraspasa()
+    h = HybridProvider(m)
+    assert h.generate(_req_h("que tal el clima")).respuesta == "Entendido, cuentame mas." and h.usado_llm
+
+    class Roto:
+        def generate(self, req):
+            raise TimeoutError("lento")
+    h2 = HybridProvider(Roto())
+    r = h2.generate(_req_h("cuanto vale la camiseta oversize negra?"))
+    assert h2.fallo_llm and "59.900" in r.respuesta      # respondieron las reglas, no se perdio al cliente
+
+
+def test_hibrido_pedido_en_curso_lo_llevan_las_reglas():
+    from app.llm import HybridProvider
+    m = _ModeloQueNoTraspasa()
+    h = HybridProvider(m)
+    r = h.generate(_req_h("quiero la camiseta oversize negra"))
+    assert r.intencion == "pedido" and m.llamadas == 0
+
+
+def test_build_provider_hibrido(monkeypatch):
+    from app.llm import HybridProvider, build_provider
+    monkeypatch.setenv("WSA_LLM_BASE_URL", "http://localhost:1/v1")
+    monkeypatch.setenv("WSA_LLM_MODEL", "m")
+    p = build_provider("hibrido:ollama")
+    assert isinstance(p, HybridProvider) and p.llm.model == "m"

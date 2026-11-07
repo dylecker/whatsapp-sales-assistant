@@ -366,16 +366,19 @@ class OpenAICompatProvider:
     """
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None, model: str | None = None,
-                 timeout: int = 60):
+                 timeout: int | None = None, max_tokens: int | None = None):
         self.base_url = (base_url or os.environ["WSA_LLM_BASE_URL"]).rstrip("/")
         self.api_key = api_key or os.getenv("WSA_LLM_API_KEY", "ollama")
         self.model = model or os.environ["WSA_LLM_MODEL"]
-        self.timeout = timeout
+        # Modelos que "razonan" (p. ej. nemotron) gastan miles de tokens pensando: subir WSA_LLM_MAX_TOKENS (4000)
+        # y WSA_LLM_TIMEOUT (segundos) evita JSON truncado y timeouts.
+        self.timeout = timeout or int(os.getenv("WSA_LLM_TIMEOUT", "120"))
+        self.max_tokens = max_tokens or int(os.getenv("WSA_LLM_MAX_TOKENS", "1000"))
         self.last_usage: dict = {}
 
     def generate(self, req: LLMRequest) -> LLMResult:
         cuerpo = json.dumps({
-            "model": self.model, "temperature": 0, "max_tokens": 500,
+            "model": self.model, "temperature": 0, "max_tokens": self.max_tokens,
             "messages": [{"role": "system", "content": SYSTEM_PROMPT_COMPAT},
                          {"role": "user", "content": json.dumps(_contexto(req), ensure_ascii=False)}],
         }).encode()
@@ -399,6 +402,7 @@ class MeteredProvider:
     def __init__(self, inner: LLMProvider):
         self.inner = inner
         self.calls: list[dict] = []
+        self.reglas = 0            # mensajes resueltos por reglas (arquitectura hibrida)
         self.last_result: LLMResult | None = None
 
     def generate(self, req: LLMRequest) -> LLMResult:
@@ -411,11 +415,59 @@ class MeteredProvider:
             self.last_result = None
             raise
         uso = dict(getattr(self.inner, "last_usage", {}) or {})
+        if getattr(self.inner, "usado_llm", True) is False:      # lo resolvieron las reglas: no hubo llamada
+            self.reglas += 1
+            self.last_result = res
+            return res
+        if getattr(self.inner, "fallo_llm", False):               # el modelo fallo y respondieron las reglas
+            self.calls.append({"ok": False, "latency_s": uso.get("latency_s", time.perf_counter() - t0),
+                               "prompt_tokens": 0, "completion_tokens": 0})
+            self.last_result = res
+            return res
         self.calls.append({"ok": True, "latency_s": uso.get("latency_s", time.perf_counter() - t0),
                            "prompt_tokens": uso.get("prompt_tokens", 0),
                            "completion_tokens": uso.get("completion_tokens", 0)})
         self.last_result = res
         return res
+
+
+class HybridProvider:
+    """Arquitectura hibrida: las reglas deciden lo critico y el modelo de lenguaje atiende el resto.
+
+    * Reglas (deterministas, sin llamada al modelo): pedir un asesor, quejas y el avance de un pedido en curso.
+      Un modelo pequeno puede olvidar traspasar a una persona o inventar la confirmacion de un pedido; esos
+      flujos no se dejan al azar.
+    * Modelo de lenguaje: consultas abiertas, preguntas frecuentes y mensajes en lenguaje libre.
+    * Si el modelo falla (timeout, JSON invalido), responden las reglas en vez de dejar al cliente sin respuesta.
+    * En todos los casos el servicio aplica despues el control de veracidad (precio, stock, tallas).
+    """
+
+    def __init__(self, llm: LLMProvider, reglas: LLMProvider | None = None):
+        self.llm = llm
+        self.reglas = reglas or RuleBasedProvider()
+        self.usado_llm = False
+        self.fallo_llm = False
+        self.last_usage: dict = {}
+
+    def _critico(self, req: LLMRequest) -> bool:
+        t = norm(req.mensaje)
+        return bool(RE_ASESOR.search(t) or RE_QUEJA.search(t) or RE_COMPRA.search(t)
+                    or (req.borrador or {}).get("producto_id"))
+
+    def generate(self, req: LLMRequest) -> LLMResult:
+        self.usado_llm, self.fallo_llm, self.last_usage = False, False, {}
+        if self._critico(req):
+            return self.reglas.generate(req)
+        self.usado_llm = True
+        t0 = time.perf_counter()
+        try:
+            res = self.llm.generate(req)
+            self.last_usage = dict(getattr(self.llm, "last_usage", {}) or {})
+            return res
+        except Exception:
+            self.fallo_llm = True
+            self.last_usage = {"latency_s": time.perf_counter() - t0}
+            return self.reglas.generate(req)
 
 
 PRESETS = {
@@ -425,6 +477,9 @@ PRESETS = {
 
 
 def build_provider(nombre: str) -> LLMProvider:
+    if nombre.startswith("hibrido"):      # "hibrido:nvidia", "hibrido:ollama" (o WSA_LLM_BACKEND)
+        base = nombre.split(":", 1)[1] if ":" in nombre else os.getenv("WSA_LLM_BACKEND", "nvidia")
+        return HybridProvider(build_provider(base))
     if nombre == "anthropic":
         return AnthropicProvider()
     if nombre in PRESETS or nombre == "openai":
