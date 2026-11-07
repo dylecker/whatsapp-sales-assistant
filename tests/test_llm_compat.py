@@ -104,3 +104,21 @@ def test_negar_una_talla_no_se_marca_como_inventada():
     assert ok.ok
     mal = verificar("Tenemos la camiseta en talla XXL. Tallas: S, M, L, XXL.", PRODUCTOS)
     assert not mal.ok and "talla_inexistente:XXL" in mal.problemas
+
+
+@pytest.mark.parametrize("texto,esperado", [
+    ("El precio es $59,900 COP.", [59900]),
+    ("Cuesta $129.900.", [129900]),
+    ("El precio es COP 39,900.", [39900]),
+    ("Son 34.900 COP.", [34900]),
+    ("Total $119,800.00", [119800]),
+    ("Tallas 28, 30, 32. Hay 14 unidades.", []),
+])
+def test_precios_con_cualquier_separador_de_miles(texto, esperado):
+    from app.textutil import precios_en_texto
+    assert precios_en_texto(texto) == esperado
+
+
+def test_respuesta_con_coma_de_miles_correcta_no_se_bloquea():
+    assert verificar("El precio de la camiseta oversize negra es de $59,900 COP.", PRODUCTOS).ok
+    assert not verificar("El precio es de $49,900 COP.", PRODUCTOS).ok

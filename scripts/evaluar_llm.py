@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 import tempfile
@@ -102,6 +103,11 @@ CASOS: list[tuple] = [
 ]
 
 
+def _n(texto: str) -> str:
+    """Normaliza separadores de miles (59.900 = 59,900) para comparar cifras sin depender del formato."""
+    return re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", texto).lower()
+
+
 def correr(provider, nombre_proveedor: str, limite: int | None) -> dict:
     tmp = tempfile.mkdtemp()
     settings = Settings(db_path=str(Path(tmp) / "eval.db"), require_consent=False)
@@ -128,8 +134,8 @@ def correr(provider, nombre_proveedor: str, limite: int | None) -> dict:
                             "(SELECT id FROM cliente WHERE telefono = ?)", (telefono,)).fetchone()
         humano = conv["modo"] == "humano"
         bloqueada = bool(conv["motivo_traspaso"] in ("respuesta_no_verificada", "falla_llm"))
-        falta = [e for e in espera if e.lower() not in ultimo.lower()]
-        sobra = [p for p in prohibe if p.lower() in ultimo.lower()]
+        falta = [e for e in espera if _n(e) not in _n(ultimo)]
+        sobra = [p for p in prohibe if _n(p) in _n(ultimo)]
         ok_traspaso = (humano == traspaso) or (bloqueada and not traspaso and not espera and not sobra)
         # un traspaso por bloqueo de veracidad o falla del modelo es seguro, pero no cuenta como acierto
         acierto = not falta and not sobra and humano == traspaso

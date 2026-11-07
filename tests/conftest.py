@@ -68,7 +68,10 @@ class Harness:
 
 
 def _start(tmp_path, settings_kw=None, llm=None):
-    settings = Settings(db_path=str(tmp_path / "test.db"), **(settings_kw or {}))
+    # Las pruebas usan SIEMPRE el proveedor local por reglas, aunque la terminal tenga WSA_LLM_PROVIDER definido
+    # (por ejemplo ollama o nvidia); si no, llamarian al modelo real: lentas, no deterministas y con timeouts.
+    kw = {"llm_provider": "reglas", **(settings_kw or {})}
+    settings = Settings(db_path=str(tmp_path / "test.db"), **kw)
     sender = SimulatedSender()
     app = create_app(settings, sender=sender, llm=llm)
     c = connect(settings.db_path)
