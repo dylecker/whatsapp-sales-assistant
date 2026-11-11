@@ -1,3 +1,4 @@
+  Proveedor de IA: hibrido:nvidia
 
 ====================================================================================================
 0. Seguridad del webhook: una peticion sin firma valida se rechaza
@@ -17,18 +18,17 @@
   ASISTENTE / EQUIPO < Gracias, ya puedo ayudarte. ¿Qué estás buscando?
       [sistema] estado=consentimiento_registrado
   ANA (WhatsApp)  > Hola! cuanto vale la camiseta oversize negra?
-  ASISTENTE / EQUIPO < Camiseta oversize negra: $59.900. Tallas: S, M, L, XL. Hay 14 unidades
-                       disponibles.
-      [sistema] estado=respondido intencion=consulta
+  ASISTENTE / EQUIPO < La camiseta oversize negra cuesta $59.900 COP. ¿Qué talla necesitas?
+      [sistema] estado=respondido intencion=faq origen=modelo
   ANA (WhatsApp)  > y tienen el vestido floral?
-  ASISTENTE / EQUIPO < Por ahora Vestido floral está agotado. Te puedo ofrecer Vestido lino beige a
-                       $119.900 (tallas S, M, L). ¿Te sirve?
-      [sistema] estado=respondido intencion=consulta
+  ASISTENTE / EQUIPO < El vestido floral tiene tallas S, M y L, pero actualmente no hay stock
+                       disponible.
+      [sistema] estado=respondido intencion=consulta origen=modelo
   ANA (WhatsApp)  > como son los envios?
   ASISTENTE / EQUIPO < Hacemos envíos a todo el país con transportadora. En Cartagena el domicilio
                        llega en 1 día hábil y a otras ciudades entre 2 y 4 días hábiles. El costo
                        del envío lo confirma una persona del equipo según tu ciudad.
-      [sistema] estado=respondido intencion=faq
+      [sistema] estado=respondido intencion=faq origen=modelo
 
 ====================================================================================================
 2. Flujo 1 - Pedido preliminar completado en varios mensajes
@@ -36,21 +36,21 @@
   ANA (WhatsApp)  > quiero la camiseta oversize negra
   ASISTENTE / EQUIPO < Perfecto, vamos con Camiseta oversize negra ($59.900). Para registrar tu
                        pedido me falta: talla (S, M, L, XL), cantidad y ciudad de envío.
-      [sistema] estado=respondido intencion=pedido
+      [sistema] estado=respondido intencion=pedido origen=reglas
   ANA (WhatsApp)  > talla M
   ASISTENTE / EQUIPO < Perfecto, vamos con Camiseta oversize negra ($59.900). Para registrar tu
                        pedido me falta: cantidad y ciudad de envío.
-      [sistema] estado=respondido intencion=pedido
+      [sistema] estado=respondido intencion=pedido origen=reglas
   ANA (WhatsApp)  > 2
   ASISTENTE / EQUIPO < Perfecto, vamos con Camiseta oversize negra ($59.900). Para registrar tu
                        pedido me falta: ciudad de envío.
-      [sistema] estado=respondido intencion=pedido
+      [sistema] estado=respondido intencion=pedido origen=reglas
   ANA (WhatsApp)  > Cartagena
   ASISTENTE / EQUIPO < Listo, registré tu pedido preliminar: 2 x Camiseta oversize negra talla M =
                        $119.800, envío a Cartagena. No necesitas dar datos de pago por aquí: una
                        persona del equipo te contactará para confirmar el envío y el pago. ¿Algo
                        más?
-      [sistema] estado=respondido intencion=pedido pedido_id=1
+      [sistema] estado=respondido intencion=pedido pedido_id=1 origen=reglas
 
 ====================================================================================================
 3. Flujo 1 - Una queja pasa la conversacion a una persona (CU-04)
@@ -68,7 +68,7 @@
   ASISTENTE / EQUIPO < Lamento lo que pasó. Voy a pasar tu caso a una persona del equipo para que lo
                        revise contigo. Mientras tanto no te responderé yo, para que no se crucen los
                        mensajes.
-      [sistema] estado=traspasado intencion=queja motivo=queja
+      [sistema] estado=traspasado intencion=queja motivo=queja origen=reglas
   (el cliente insiste mientras nadie ha tomado el chat: la IA no responde)
   LUIS (WhatsApp)  > hola? alguien me puede atender?
       [sistema] estado=notificado_asesor
@@ -84,36 +84,36 @@
                     la prenda.
   POST /api/conversaciones/2/devolver-ia -> 200
   LUIS (WhatsApp)  > gracias, cuanto cuesta la gorra clasica?
-  ASISTENTE / EQUIPO < Gorra clásica negra: $34.900. Quedan pocas unidades (3).
-      [sistema] estado=respondido intencion=consulta
+  ASISTENTE / EQUIPO < ¡Hola! Sí, estamos aquí. ¿En qué más puedo ayudarte?
+      [sistema] estado=respondido intencion=saludo origen=modelo
 
 ====================================================================================================
 5. Panel del propietario - embudo, pedidos e indicadores
 ====================================================================================================
-  Embudo (clientes por etapa): nuevo=0, interesado=1, negociando=1, cerrado=0, perdido=0
+  Embudo (clientes por etapa): nuevo=1, interesado=0, negociando=1, cerrado=0, perdido=0
   Pedido #1 [preliminar] Ana Torres -> Cartagena: 2 x Camiseta oversize negra talla M a $59.900 = $119.800
-  Indicadores: {"conversaciones": 2, "tiempo_respuesta_promedio_seg": 0.0, "leads_en_seguimiento": 2, "tasa_conversion_pct": 0.0, "por_etapa": {"interesado": 1, "negociando": 1}, "mensajes_por_remitente": {"cliente": 14, "humano": 1, "ia": 13}, "pendientes_asesor": 0}
+  Indicadores: {"conversaciones": 2, "tiempo_respuesta_promedio_seg": 9.9, "leads_en_seguimiento": 1, "tasa_conversion_pct": 0.0, "por_etapa": {"negociando": 1, "nuevo": 1}, "mensajes_por_remitente": {"cliente": 14, "humano": 1, "ia": 13}, "pendientes_asesor": 0}
 
 ====================================================================================================
 6. Trazabilidad - quien escribio cada mensaje (RNF-11), conversacion de Luis
 ====================================================================================================
-  22:26:59 cliente           | hola
-  22:26:59 IA                | Hola, soy el asistente virtual de Moda Caribe. Para atenderte
+  22:11:15 cliente           | hola
+  22:11:15 IA                | Hola, soy el asistente virtual de Moda Caribe. Para atenderte
                                necesito tu autorización para tratar tus datos personales (nombre y
                                número de teléfono) con el único fin de atender tu solicitud, según
                                la Ley 1581 de 2012. Puedes pedir que los eliminemos cuando quieras.
                                Responde ACEPTO para continuar.
-  22:26:59 cliente           | ACEPTO
-  22:26:59 IA                | Gracias, ya puedo ayudarte. ¿Qué estás buscando?
-  22:26:59 cliente           | tengo una queja, la ultima compra llego danada
-  22:26:59 IA                | Lamento lo que pasó. Voy a pasar tu caso a una persona del equipo
+  22:11:15 cliente           | ACEPTO
+  22:11:15 IA                | Gracias, ya puedo ayudarte. ¿Qué estás buscando?
+  22:11:15 cliente           | tengo una queja, la ultima compra llego danada
+  22:11:15 IA                | Lamento lo que pasó. Voy a pasar tu caso a una persona del equipo
                                para que lo revise contigo. Mientras tanto no te responderé yo, para
                                que no se crucen los mensajes.
-  22:26:59 cliente           | hola? alguien me puede atender?
-  22:26:59 humano(usuario 2) | Hola Luis, soy Carlos de Moda Caribe. Lamento lo ocurrido, cuentame
+  22:11:15 cliente           | hola? alguien me puede atender?
+  22:11:15 humano(usuario 2) | Hola Luis, soy Carlos de Moda Caribe. Lamento lo ocurrido, cuentame
                                que paso con la prenda.
-  22:26:59 cliente           | gracias, cuanto cuesta la gorra clasica?
-  22:26:59 IA                | Gorra clásica negra: $34.900. Quedan pocas unidades (3).
+  22:11:15 cliente           | gracias, cuanto cuesta la gorra clasica?
+  22:11:53 IA                | ¡Hola! Sí, estamos aquí. ¿En qué más puedo ayudarte?
 
 ====================================================================================================
 7. Datos guardados en la base
@@ -123,7 +123,7 @@
   cliente                2 filas
   conversacion           2 filas
   mensaje               28 filas
-  evento_embudo          3 filas
+  evento_embudo          2 filas
   producto               7 filas
   pregunta_frecuente     4 filas
   pedido                 1 filas
