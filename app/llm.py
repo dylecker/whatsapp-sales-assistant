@@ -349,6 +349,15 @@ def _a_resultado(crudo: dict) -> LLMResult:
 
 
 def _contexto(req: LLMRequest) -> dict:
+    # Linea base B1 (hito 2): con WSA_SIN_RECUPERACION=1 el modelo NO recibe catalogo ni preguntas frecuentes.
+    ctx = _contexto_completo(req)
+    if os.getenv("WSA_SIN_RECUPERACION", "0") == "1":
+        ctx["productos"] = []
+        ctx["preguntas_frecuentes"] = []
+    return ctx
+
+
+def _contexto_completo(req: LLMRequest) -> dict:
     return {
         "negocio": req.negocio_nombre, "tono": req.tono, "mensaje_cliente": req.mensaje,
         "historial": req.historial[-8:], "borrador_pedido": req.borrador,
