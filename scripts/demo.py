@@ -9,6 +9,7 @@ panel como lo haria el propietario o el vendedor. Imprime la conversacion comple
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -24,6 +25,7 @@ import uvicorn  # noqa: E402
 from app.api import create_app  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import connect  # noqa: E402
+from app.llm import MeteredProvider, build_provider  # noqa: E402
 from app.seed import OWNER, PHONE_NUMBER_ID, SELLER, seed  # noqa: E402
 from app.security import sign_body  # noqa: E402
 from app.whatsapp import SimulatedSender, build_payload  # noqa: E402
@@ -61,7 +63,9 @@ def main() -> int:
     tmp = tempfile.mkdtemp(prefix="wsa-demo-")
     settings = Settings(db_path=f"{tmp}/demo.db", require_consent=True)
     sender = SimulatedSender()
-    app = create_app(settings, sender=sender)
+    medidor = MeteredProvider(build_provider(settings.llm_provider))
+    app = create_app(settings, sender=sender, llm=medidor)
+    espera = float(os.getenv("WSA_DEMO_TIMEOUT", "180"))   # un modelo que razona puede tardar mas de 10 s
     c = connect(settings.db_path)
     seed(c)
     c.close()
@@ -70,12 +74,12 @@ def main() -> int:
     while not server.started:
         time.sleep(0.05)
     base = f"http://127.0.0.1:{server.servers[0].sockets[0].getsockname()[1]}"
-    contador = {"n": 0, "visto": 0}
+    contador = {"n": 0, "visto": 0, "llamadas": 0, "reglas": 0}
 
     def http(method, path, body=None, headers=None):
         req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
         try:
-            with urllib.request.urlopen(req, timeout=10) as r:
+            with urllib.request.urlopen(req, timeout=espera) as r:
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read() or b"{}")
@@ -91,8 +95,16 @@ def main() -> int:
         while contador["visto"] < len(sender.outbox):
             envuelto("  ASISTENTE / EQUIPO < ", sender.outbox[contador["visto"]]["text"])
             contador["visto"] += 1
+        origen = ""
+        if settings.llm_provider == "reglas":
+            origen = " origen=reglas"
+        elif len(medidor.calls) > contador["llamadas"]:
+            origen = " origen=modelo" if medidor.calls[-1]["ok"] else " origen=reglas(el modelo fallo)"
+        elif medidor.reglas > contador["reglas"]:
+            origen = " origen=reglas"
+        contador["llamadas"], contador["reglas"] = len(medidor.calls), medidor.reglas
         linea(f"      [sistema] estado={res['estado']}" + "".join(
-            f" {k}={res[k]}" for k in ("intencion", "motivo", "pedido_id") if res.get(k)))
+            f" {k}={res[k]}" for k in ("intencion", "motivo", "pedido_id") if res.get(k)) + origen)
         return res
 
     def panel(token, method, path, body=None):
@@ -101,6 +113,7 @@ def main() -> int:
 
     ana, luis = ("Ana Torres", "573001112233"), ("Luis Ortega", "573004445566")
 
+    linea(f"  Proveedor de IA: {settings.llm_provider}")
     titulo("0. Seguridad del webhook: una peticion sin firma valida se rechaza")
     status, data = http("POST", "/webhook", b'{"object":"whatsapp_business_account","entry":[]}',
                         {"X-Hub-Signature-256": "sha256=" + "0" * 64})

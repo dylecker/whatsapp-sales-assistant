@@ -12,7 +12,8 @@ from .config import Settings
 from .db import utcnow
 from .llm import LLMProvider, LLMRequest, LLMResult
 from .retrieval import LexicalRetriever, Retriever
-from .textutil import norm, precios_en_texto
+from .textutil import norm
+from .veracidad import verificar
 from .whatsapp import Inbound, WhatsAppSender
 
 log = logging.getLogger("wsa.service")
@@ -166,9 +167,12 @@ class ConversationService:
             log.exception("Fallo del proveedor de LLM")
             res = LLMResult("otra", MSG_FALLA, requiere_humano=True, motivo="falla_llm")
 
-        # Control de veracidad (RNF-05): ningun precio puede salir de fuera del catalogo recuperado
-        if not res.requiere_humano and not self._respuesta_verificada(res.respuesta, productos):
-            log.warning("Respuesta con precio no verificado; se traspasa a una persona: %r", res.respuesta)
+        # Control de veracidad (RNF-05): precio, stock y tallas deben coincidir con la base de datos
+        if not res.requiere_humano:
+            veredicto = verificar(res.respuesta, productos, res.borrador, texto)
+        if not res.requiere_humano and not veredicto.ok:
+            log.warning("Respuesta no verificada (%s); se traspasa a una persona: %r",
+                        veredicto.problemas, res.respuesta)
             res = LLMResult(res.intencion, MSG_FALLA, requiere_humano=True, motivo="respuesta_no_verificada")
 
         self.conn.execute("UPDATE mensaje SET intencion = ? WHERE id = ?", (res.intencion, msg_id))
@@ -230,14 +234,6 @@ class ConversationService:
         self._enviar(negocio, conv, cliente, aviso, "aviso_datos")
         self.conn.commit()
         return {"estado": "aviso_enviado", "conversacion_id": conv["id"]}
-
-    @staticmethod
-    def _respuesta_verificada(texto: str, productos: list[dict]) -> bool:
-        permitidos: set[int] = set()
-        for p in productos:
-            permitidos.add(p["precio_cop"])
-            permitidos.update(p["precio_cop"] * q for q in range(2, 100))
-        return all(v in permitidos for v in precios_en_texto(texto))
 
     def _registrar_pedido(self, negocio, conv, cliente, b: dict) -> tuple[int | None, str | None]:
         prod = self.conn.execute("SELECT * FROM producto WHERE id = ? AND negocio_id = ? AND activo = 1",

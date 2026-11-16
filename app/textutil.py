@@ -43,8 +43,15 @@ def cop(valor: int) -> str:
     return "$" + f"{int(valor):,}".replace(",", ".")
 
 
-PRECIO_RE = re.compile(r"\$\s?(\d{1,3}(?:\.\d{3})+|\d+)")
+# Un monto puede venir como $59.900, $59,900, COP 59,900 o 59.900 COP (los modelos de lenguaje mezclan
+# punto y coma como separador de miles). Los centavos (",00" / ".00") se ignoran.
+_MONTO = r"(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{1,2}(?!\d))?"
+PRECIO_RE = re.compile(r"(?:\$|\bCOP)\s?" + _MONTO + r"|" + _MONTO + r"\s?(?:COP\b|pesos\b)", re.I)
 
 
 def precios_en_texto(texto: str) -> list[int]:
-    return [int(m.replace(".", "")) for m in PRECIO_RE.findall(texto)]
+    valores = []
+    for m in PRECIO_RE.finditer(texto):
+        crudo = m.group(1) or m.group(2)
+        valores.append(int(re.sub(r"[.,]", "", crudo)))
+    return valores
