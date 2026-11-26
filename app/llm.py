@@ -387,7 +387,8 @@ class OpenAICompatProvider:
 
     def generate(self, req: LLMRequest) -> LLMResult:
         cuerpo = json.dumps({
-            "model": self.model, "temperature": 0, "max_tokens": self.max_tokens,
+            "model": self.model, "temperature": float(os.getenv("WSA_LLM_TEMPERATURE", "0")), "max_tokens": self.max_tokens,
+            **({"seed": int(os.environ["WSA_LLM_SEED"])} if os.getenv("WSA_LLM_SEED") else {}),
             "messages": [{"role": "system", "content": SYSTEM_PROMPT_COMPAT},
                          {"role": "user", "content": json.dumps(_contexto(req), ensure_ascii=False)}],
         }).encode()
