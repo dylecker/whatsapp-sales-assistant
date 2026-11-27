@@ -30,7 +30,7 @@ pip install -r requirements.txt
 Después, en cualquiera de los dos:
 
 ```bash
-python -m pytest -q            # 57 pruebas de extremo a extremo (todas pasan)
+python -m pytest -q            # 59 pruebas automatizadas (todas pasan en la validación realizada)
 python scripts/demo.py         # demostración completa en consola
 python -m app.main             # servidor en http://127.0.0.1:8000 con datos de ejemplo
 ```
@@ -75,6 +75,8 @@ generativa en el trabajo se registra en `docs/bitacora_ia.md`.
 
 ## Estructura
 
+La carpeta `app/` equivale conceptualmente a `src/` y contiene el código fuente principal de la aplicación.
+
 | Archivo | Responsabilidad |
 | --- | --- |
 | `app/api.py` | Webhook de WhatsApp (GET de verificación y POST firmado) y API REST del panel |
@@ -107,3 +109,38 @@ Modelo de lenguaje: `WSA_LLM_PROVIDER` (`reglas` | `ollama` | `nvidia` | `openai
 - La demo y las pruebas automáticas usan el proveedor local por reglas y un envío simulado. Los modelos reales (Ollama y NVIDIA) se evaluaron con `scripts/evaluar_llm.py`, con casos escritos por el equipo y una corrida por configuración.
 - La base es SQLite; el diseño en PostgreSQL + pgvector y la migración a FastAPI/SQLAlchemy quedan para Proyecto de Ingeniería II.
 - Pendientes de requerimientos: RF-14 (recordatorios), RF-15 (exportar CSV), eliminación de datos de un cliente (RNF-04) y documentación OpenAPI (RNF-09).
+
+
+## Reproducción desde una instalación limpia
+
+Los siguientes pasos permiten clonar, instalar y evaluar el proyecto desde un entorno nuevo.
+
+1. **Clonar el repositorio y entrar en la carpeta:**
+
+   ```powershell
+   git clone https://github.com/dylecker/whatsapp-sales-assistant.git; cd whatsapp-sales-assistant
+   ```
+
+2. **Crear y activar el entorno virtual:**
+
+   ```powershell
+   python -m venv .venv; .\.venv\Scripts\Activate.ps1
+   ```
+
+3. **Instalar las dependencias:**
+
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+4. **Ejecutar las pruebas automatizadas:**
+
+   ```powershell
+   python -m pytest -q
+   ```
+
+5. **Ejecutar la evaluación B0 de los 50 casos:**
+
+   ```powershell
+   python scripts/evaluar_llm.py --salida experiments/B0_reglas
+   ```
