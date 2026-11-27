@@ -21,6 +21,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import platform
+import subprocess
 import re
 import statistics
 import sys
@@ -148,7 +151,10 @@ def _n(texto: str) -> str:
     return re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", texto).lower()
 
 
-def correr(provider, nombre_proveedor: str, limite: int | None) -> dict:
+def correr(provider, nombre_proveedor: str, limite: int | None, casos=None, pedidos=None, extras=None) -> dict:
+    casos = CASOS if casos is None else casos
+    pedidos = PEDIDOS if pedidos is None else pedidos
+    extras = extras or {}
     tmp = tempfile.mkdtemp()
     settings = Settings(db_path=str(Path(tmp) / "eval.db"), require_consent=False)
     init_db(settings.db_path)
@@ -159,7 +165,7 @@ def correr(provider, nombre_proveedor: str, limite: int | None) -> dict:
     metered = provider if isinstance(provider, MeteredProvider) else None
 
     filas, n = [], 0
-    for i, (cid, cat, mensajes, espera, prohibe, traspaso) in enumerate(CASOS[:limite]):
+    for i, (cid, cat, mensajes, espera, prohibe, traspaso) in enumerate(casos[:limite]):
         telefono = f"5730000{i:05d}"
         ultimo, estado, motivo = "", "", None
         t0 = time.perf_counter()
@@ -179,10 +185,11 @@ def correr(provider, nombre_proveedor: str, limite: int | None) -> dict:
         ok_traspaso = (humano == traspaso) or (bloqueada and not traspaso and not espera and not sobra)
         # un traspaso por bloqueo de veracidad o falla del modelo es seguro, pero no cuenta como acierto
         registrados = _pedido_en_bd(conn, telefono)
-        pedido_ok = _pedido_ok(PEDIDOS[cid], registrados) if cid in PEDIDOS else True
+        pedido_ok = _pedido_ok(pedidos[cid], registrados) if cid in pedidos else True
         acierto = not falta and not sobra and humano == traspaso and pedido_ok
         filas.append({
             "id": cid, "categoria": cat, "mensajes": mensajes, "respuesta": ultimo, "acierto": acierto,
+            "variante": extras.get(cid, {}).get("variante", ""), "autor": extras.get(cid, {}).get("autor", ""),
             "traspaso": humano, "pedido_registrado": registrados, "pedido_ok": pedido_ok,
             "bloqueada_por_veracidad": conv["motivo_traspaso"] == "respuesta_no_verificada",
             "falla_llm": conv["motivo_traspaso"] == "falla_llm", "faltan": falta, "sobran": sobra,
@@ -269,6 +276,44 @@ def markdown(res: dict, c: dict | None) -> str:
     return "\n".join(out) + "\n"
 
 
+def cargar_casos(ruta: str):
+    """Lee un archivo JSON de casos y lo convierte al formato interno (casos, pedidos, extras)."""
+    datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    casos, pedidos, extras = [], {}, {}
+    for d in datos:
+        casos.append((d["id"], d["categoria"], d["mensajes"], d.get("espera", []), d.get("prohibe", []),
+                      bool(d.get("traspaso", False))))
+        p = d.get("pedido")
+        if p == "ninguno":
+            pedidos[d["id"]] = "ninguno"
+        elif p:
+            pedidos[d["id"]] = tuple(p)
+        extras[d["id"]] = {"variante": d.get("variante", ""), "autor": d.get("autor", "")}
+    ids = [c[0] for c in casos]
+    assert len(ids) == len(set(ids)), "Hay identificadores de caso repetidos en " + ruta
+    return casos, pedidos, extras
+
+
+def metadatos(a, nombre: str) -> dict:
+    """Datos para reproducir la corrida: commit, modelo, recuperacion, temperatura, semilla, corrida."""
+    from datetime import datetime
+    raiz = Path(__file__).resolve().parents[1]
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=raiz).stdout.strip()
+        sucio = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True,
+                               cwd=raiz).stdout.strip() != ""
+    except Exception:
+        commit, sucio = "", None
+    return {
+        "fecha": datetime.now().isoformat(timespec="seconds"), "commit": commit, "cambios_sin_commit": sucio,
+        "proveedor": nombre,
+        "recuperacion": "ninguna" if os.getenv("WSA_SIN_RECUPERACION", "0") == "1" else os.getenv("WSA_RECUPERACION", "lexica"),
+        "temperatura": float(os.getenv("WSA_LLM_TEMPERATURE", "0")), "semilla": os.getenv("WSA_LLM_SEED") or None,
+        "corrida": a.corrida, "casos_archivo": a.casos or "casos de desarrollo (dentro del script)",
+        "limite": a.limite, "python": platform.python_version(),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--limite", type=int, default=None, help="solo los primeros N casos (prueba rapida)")
@@ -277,15 +322,21 @@ def main() -> int:
     ap.add_argument("--usd-por-mtok-salida", type=float, default=15.0)
     ap.add_argument("--mensajes-mes", type=int, default=3000, help="mensajes de cliente por mes para proyectar el costo")
     ap.add_argument("--cop-por-usd", type=float, default=4000.0)
+    ap.add_argument("--casos", help="archivo JSON con los casos (por defecto, los 50 casos de desarrollo del script)")
+    ap.add_argument("--corrida", type=int, default=1, help="numero de corrida (se guarda en los metadatos)")
     a = ap.parse_args()
 
     nombre = Settings().llm_provider
     prov = MeteredProvider(build_provider(nombre))
     if hasattr(prov.inner, "model"):
         nombre = f"{nombre} ({prov.inner.model})"
-    res = correr(prov, nombre, a.limite)
+    casos = pedidos = extras = None
+    if a.casos:
+        casos, pedidos, extras = cargar_casos(a.casos)
+    res = correr(prov, nombre, a.limite, casos, pedidos, extras)
     c = costo(res["resumen"], a.usd_por_mtok_entrada, a.usd_por_mtok_salida, a.mensajes_mes, a.cop_por_usd)
     res["costo_referencia"] = c
+    res["metadatos"] = metadatos(a, nombre)
     md = markdown(res, c)
     print(md)
     if a.salida:
